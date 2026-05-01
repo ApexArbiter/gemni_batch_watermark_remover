@@ -21,8 +21,8 @@ set "MASK_FILE=%~dp0watermark-mask.png"
 set "OUTPUT_DIR=%~dp0batch-output"
 
 REM --- Mask mode ---------------------------------------------------------------
-REM Set MASK_RULES_JSON=path\to\rules.json for size-based masks (see mask-rules.example.json).
-set "MASK_RULES_JSON="
+REM Tuned for your scan: 626 / 1024 / 1280x698 / 1428-1431 / 1600. Clear MASK_RULES_JSON to use CORNER_* only.
+set "MASK_RULES_JSON=%~dp0mask-rules.Images-default.json"
 REM USE_CORNER_MASK=1 (default): one set of corner fractions for every photo.
 REM USE_CORNER_MASK=0: watermark-mask.png only.
 set "USE_CORNER_MASK=1"

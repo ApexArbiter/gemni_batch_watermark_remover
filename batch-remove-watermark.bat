@@ -23,12 +23,10 @@ set "OUTPUT_DIR=%~dp0batch-output"
 
 
 REM --- Mask mode ---------------------------------------------------------------
-REM 1) Leave MASK_RULES_JSON empty: corner fractions (same for all photos; still scaled per image).
-REM 2) Set MASK_RULES_JSON to a JSON file (copy mask-rules.example.json) for different corners/masks
-REM    by width/height — run scan-image-sizes.bat on your Images folder first to see sizes.
-REM 3) USE_CORNER_MASK=0 uses watermark-mask.png only.
+REM Default JSON matches typical buckets (626 / 1024 / 1280x698 / ~1430x780 / 1600). Clear MASK_RULES_JSON to use CORNER_* only.
+REM USE_CORNER_MASK=0 uses watermark-mask.png only when MASK_RULES_JSON is empty.
 
-set "MASK_RULES_JSON="
+set "MASK_RULES_JSON=%~dp0mask-rules.Images-default.json"
 
 set "USE_CORNER_MASK=1"
 
