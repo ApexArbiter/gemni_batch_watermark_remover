@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local / generated images (keep repo-root mask)
+*.jpg
+*.jpeg
+*.jpe
+*.png
+!watermark-mask.png
+
+# Batch and IOPaint working dirs
+batch-input/*
+batch-output/*
+iopaint-input/*
