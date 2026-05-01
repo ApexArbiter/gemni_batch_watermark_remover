@@ -16,7 +16,35 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+import numpy as np
+from PIL import Image
+
+
+def build_corner_mask_array(
+    width: int,
+    height: int,
+    w_frac: float = 0.22,
+    h_frac: float = 0.14,
+    margin_frac: float = 0.01,
+    pad_frac: float = 0.0,
+) -> np.ndarray:
+    """
+    Grayscale mask (uint8): 255 = inpaint, 0 = keep. Bottom-right rectangle.
+    Matches make_corner_mask.py / PIL rectangle (inclusive corners).
+    """
+    m = min(width, height)
+    margin = int(max(1, margin_frac * m))
+    scale = max(0.0, 1.0 + pad_frac)
+    box_w = max(1, int(width * w_frac * scale))
+    box_h = max(1, int(height * h_frac * scale))
+    x0 = max(0, width - margin - box_w)
+    y0 = max(0, height - margin - box_h)
+    mask = np.zeros((height, width), dtype=np.uint8)
+    x1 = width - margin
+    y1 = height - margin
+    if x1 >= x0 and y1 >= y0:
+        mask[y0 : y1 + 1, x0 : x1 + 1] = 255
+    return mask
 
 
 def main() -> None:
@@ -47,21 +75,15 @@ def main() -> None:
     else:
         w, h = args.width, args.height
 
-    m = min(w, h)
-    margin = int(max(1, args.margin_frac * m))
-    scale = max(0.0, 1.0 + args.pad_frac)
-    box_w = max(1, int(w * args.w_frac * scale))
-    box_h = max(1, int(h * args.h_frac * scale))
-    x0 = w - margin - box_w
-    y0 = h - margin - box_h
-    x0 = max(0, x0)
-    y0 = max(0, y0)
-
-    mask = Image.new("L", (w, h), 0)
-    ImageDraw.Draw(mask).rectangle([x0, y0, w - margin, h - margin], fill=255)
+    arr = build_corner_mask_array(w, h, args.w_frac, args.h_frac, args.margin_frac, args.pad_frac)
+    mask = Image.fromarray(arr, mode="L")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     mask.save(args.output)
-    print(f"Wrote {args.output.resolve()} size {w}x{h} white box roughly bottom-right ({x0},{y0})-({w-margin},{h-margin})")
+    if arr.any():
+        ys, xs = np.where(arr >= 127)
+        print(f"Wrote {args.output.resolve()} size {w}x{h} bottom-right mask ({xs.min()},{ys.min()})-({xs.max()},{ys.max()})")
+    else:
+        print(f"Wrote {args.output.resolve()} size {w}x{h} (warning: empty mask)")
 
 
 if __name__ == "__main__":
