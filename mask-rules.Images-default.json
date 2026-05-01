@@ -1,0 +1,30 @@
+{
+  "fallback": {
+    "w_frac": 0.16,
+    "h_frac": 0.24,
+    "margin_frac": 0.06,
+    "pad_frac": 0.0
+  },
+  "rules": [
+    {
+      "if": { "width_max": 1050, "height_max": 1050 },
+      "then": { "w_frac": 0.2, "h_frac": 0.2, "margin_frac": 0.05, "pad_frac": 0.0 }
+    },
+    {
+      "if": { "width_min": 1250, "width_max": 1320, "height_max": 720 },
+      "then": { "w_frac": 0.14, "h_frac": 0.24, "margin_frac": 0.07, "pad_frac": 0.0 }
+    },
+    {
+      "if": { "width_min": 1550, "height_min": 820 },
+      "then": { "w_frac": 0.12, "h_frac": 0.2, "margin_frac": 0.08, "pad_frac": 0.0 }
+    },
+    {
+      "if": { "width_min": 1380, "width_max": 1480, "height_min": 760, "height_max": 800 },
+      "then": { "w_frac": 0.13, "h_frac": 0.22, "margin_frac": 0.07, "pad_frac": 0.0 }
+    },
+    {
+      "if": { "width_max": 700, "height_max": 700 },
+      "then": { "w_frac": 0.22, "h_frac": 0.22, "margin_frac": 0.04, "pad_frac": 0.0 }
+    }
+  ]
+}

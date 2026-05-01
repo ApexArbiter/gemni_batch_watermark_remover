@@ -1,0 +1,18 @@
+{
+  "fallback": {
+    "w_frac": 0.15,
+    "h_frac": 0.22,
+    "margin_frac": 0.06,
+    "pad_frac": 0.0
+  },
+  "rules": [
+    {
+      "if": { "width_max": 1200, "height_max": 1200 },
+      "then": { "w_frac": 0.22, "h_frac": 0.3, "margin_frac": 0.05, "pad_frac": 0.0 }
+    },
+    {
+      "if": { "min_long_side": 2000 },
+      "then": { "w_frac": 0.1, "h_frac": 0.16, "margin_frac": 0.08, "pad_frac": 0.0 }
+    }
+  ]
+}

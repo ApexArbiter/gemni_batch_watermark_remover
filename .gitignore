@@ -15,3 +15,6 @@ __pycache__/
 batch-input/*
 batch-output/*
 iopaint-input/*
+Images/*
+!Images/.gitkeep
+image-sizes-report.csv

@@ -1,6 +1,9 @@
 """
 Recursive batch inpaint: mirror folder layout and filenames under --output.
-Loads LaMa (or chosen model) once per process; same mask resized per image.
+Loads LaMa (or chosen model) once per process.
+
+Masks: single PNG (--mask), uniform corner fractions (--use-corner-mask), or
+per-image rules from JSON (--mask-rules) for mixed sizes / different placements.
 Use --workers > 1 for parallel processes (each loads the model; higher RAM).
 """
 from __future__ import annotations
@@ -47,6 +50,7 @@ from iopaint.download import cli_download_model, scan_models
 from iopaint.helper import pil_to_bytes
 
 from make_corner_mask import build_corner_mask_array
+from mask_rules import MaskRules
 from iopaint.model.utils import torch_gc
 from iopaint.model_manager import ModelManager
 from iopaint.schema import HDStrategy, InpaintRequest
@@ -111,6 +115,7 @@ def inpaint_one(
     model_manager: ModelManager,
     inpaint_request: InpaintRequest,
     quality: int,
+    mask_rules: Optional[MaskRules] = None,
 ) -> Path:
     rel = image_p.relative_to(root_in)
     out_p = root_out / rel
@@ -125,7 +130,21 @@ def inpaint_one(
     img = np.array(im)
     ih, iw = img.shape[:2]
 
-    if corner_fracs is not None:
+    if mask_rules is not None:
+        tmpl, cr = mask_rules.resolve(iw, ih)
+        if tmpl is not None:
+            mask_img = tmpl.copy()
+            if mask_img.shape[:2] != (ih, iw):
+                mask_img = cv2.resize(
+                    mask_img,
+                    (iw, ih),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+        else:
+            assert cr is not None
+            wf, hf, mf, pf = cr
+            mask_img = build_corner_mask_array(iw, ih, wf, hf, mf, pf)
+    elif corner_fracs is not None:
         wf, hf, mf, pf = corner_fracs
         mask_img = build_corner_mask_array(iw, ih, wf, hf, mf, pf)
     else:
@@ -159,6 +178,7 @@ def _mp_init(
     device: str,
     req_dict: dict,
     quality: int,
+    rules_path: str,
 ) -> None:
     import torch
 
@@ -171,8 +191,12 @@ def _mp_init(
     _MP["model"] = ModelManager(name=model_name, device=device)
     _MP["req"] = InpaintRequest(**req_dict)
     _MP["quality"] = quality
+    _MP["mask_rules"] = MaskRules.load(Path(rules_path)) if rules_path else None
     _MP["use_corner"] = use_corner_mask
-    if use_corner_mask:
+    if _MP["mask_rules"] is not None:
+        _MP["corner"] = None
+        _MP["base_mask"] = None
+    elif use_corner_mask:
         _MP["corner"] = (corner_wf, corner_hf, corner_mf, corner_pf)
         _MP["base_mask"] = None
     else:
@@ -191,6 +215,7 @@ def _mp_run(task: tuple[str, str, str]) -> str:
         _MP["model"],
         _MP["req"],
         _MP["quality"],
+        _MP.get("mask_rules"),
     )
     return rel.as_posix()
 
@@ -217,6 +242,12 @@ def main() -> None:
     ap.add_argument("--corner-h-frac", type=float, default=0.20)
     ap.add_argument("--corner-margin-frac", type=float, default=0.08)
     ap.add_argument("--corner-pad-frac", type=float, default=0.0)
+    ap.add_argument(
+        "--mask-rules",
+        type=Path,
+        default=None,
+        help="JSON: per-image corner fractions or mask PNG by width/height predicates (see mask-rules.example.json).",
+    )
     ap.add_argument("--model", default="lama")
     ap.add_argument("--device", default="cpu", choices=["cpu", "cuda", "mps"])
     ap.add_argument("--config", type=Path, default=None, help="Optional InpaintRequest JSON")
@@ -232,9 +263,19 @@ def main() -> None:
     root_in = args.input.resolve()
     root_out = args.output.resolve()
 
-    if args.use_corner_mask:
+    mask_rules_obj: Optional[MaskRules] = None
+    if args.mask_rules is not None:
+        if not args.mask_rules.is_file():
+            console.print(
+                Panel(f"[bold red]--mask-rules not found:[/] {args.mask_rules}", border_style="red"),
+            )
+            raise SystemExit(1)
+        mask_rules_obj = MaskRules.load(args.mask_rules.resolve())
         mask_path: Optional[Path] = None
-        corner_tuple: Optional[CornerFracs] = (
+        corner_tuple: Optional[CornerFracs] = None
+    elif args.use_corner_mask:
+        mask_path = None
+        corner_tuple = (
             args.corner_w_frac,
             args.corner_h_frac,
             args.corner_margin_frac,
@@ -245,8 +286,8 @@ def main() -> None:
         if args.mask is None or not args.mask.is_file():
             console.print(
                 Panel(
-                    "[bold red]Missing --mask PNG[/] or use [bold]--use-corner-mask[/] "
-                    "for per-image corner masks (recommended when photo sizes differ).",
+                    "[bold red]Missing --mask PNG[/], or use [bold]--use-corner-mask[/], "
+                    "or [bold]--mask-rules[/] JSON. Run scan_image_sizes.py on your folder first.",
                     border_style="red",
                 ),
             )
@@ -271,6 +312,12 @@ def main() -> None:
     if mask_path is not None and not mask_path.is_file():
         console.print(Panel("[bold red]Mask file is missing.[/]", border_style="red"))
         raise SystemExit(1)
+
+    if mask_rules_obj is not None and args.mask is not None:
+        console.print(
+            "[dim]Note:[/] [bold]--mask-rules[/] is active; single-file [bold]--mask[/] is ignored.",
+        )
+        console.print()
 
     images = iter_images(root_in)
     if not images:
@@ -330,12 +377,13 @@ def main() -> None:
     summary.add_row("Images queued", f"[bold]{len(images)}[/]")
     summary.add_row("Model", f"[cyan]{args.model}[/]")
     summary.add_row("HD strategy", "[green]Original[/]  (no resize / crop tiling)")
-    summary.add_row(
-        "Mask",
-        "[cyan]Per-image corner[/]  [dim](fractions)[/]"
-        if corner_tuple
-        else "[cyan]PNG[/] resized per photo",
-    )
+    if mask_rules_obj is not None:
+        mask_summary = "[cyan]JSON rules[/]  [dim](corners and/or masks by size)[/]"
+    elif corner_tuple:
+        mask_summary = "[cyan]Per-image corner[/]  [dim](fractions)[/]"
+    else:
+        mask_summary = "[cyan]PNG[/] resized per photo"
+    summary.add_row("Mask", mask_summary)
     summary.add_row("Output layout", "[white]Mirrors input folders and filenames[/]")
     summary.add_row(
         "Parallel workers",
@@ -375,7 +423,7 @@ def main() -> None:
                 model_manager = ModelManager(name=args.model, device=args.device)
             base_mask_arr: Optional[np.ndarray] = (
                 None
-                if corner_tuple
+                if (corner_tuple or mask_rules_obj)
                 else np.array(Image.open(mask_path).convert("L"))
             )
             console.print("[green]Model ready.[/]     [dim]Processing queue...[/]\n")
@@ -391,6 +439,7 @@ def main() -> None:
                     model_manager,
                     inpaint_request,
                     args.quality,
+                    mask_rules_obj,
                 )
                 progress.advance(task_id)
         else:
@@ -399,6 +448,7 @@ def main() -> None:
                 f"(first batch may pause while models load)...[/]\n",
             )
             mp_mask = "" if mask_path is None else str(mask_path)
+            rules_s = str(args.mask_rules.resolve()) if args.mask_rules else ""
             with ProcessPoolExecutor(
                 max_workers=effective_workers,
                 initializer=_mp_init,
@@ -413,6 +463,7 @@ def main() -> None:
                     args.device,
                     req_dict,
                     args.quality,
+                    rules_s,
                 ),
             ) as pool:
                 futures = {pool.submit(_mp_run, t): t for t in tasks}
