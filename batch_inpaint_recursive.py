@@ -286,10 +286,8 @@ def main() -> None:
                 futures = {pool.submit(_mp_run, t): t for t in tasks}
                 for fut in as_completed(futures):
                     task_tuple = futures[fut]
-                    image_path = Path(task_tuple[2])
-                    rel = image_path.relative_to(root_in)
-                    progress.update(task_id, rel=_short_rel(rel), refresh=True)
-                    fut.result()
+                    rel_s = fut.result()
+                    progress.update(task_id, rel=_short_rel(Path(rel_s)), refresh=True)
                     progress.advance(task_id)
 
     elapsed = time.monotonic() - t0
