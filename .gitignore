@@ -4,12 +4,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Local / generated images (keep repo-root mask)
+# Local / generated images (do not commit photos from batch folders above)
 *.jpg
 *.jpeg
 *.jpe
+
+# PNG: ignore by default, but these ARE committed and push to GitHub:
+#   - watermark-mask.png (optional single-mask workflow)
+#   - masks/gemini_*.png (per-resolution LaMa masks for handpaint batch)
 *.png
 !watermark-mask.png
+!masks/*.png
 
 # Batch and IOPaint working dirs
 batch-input/*

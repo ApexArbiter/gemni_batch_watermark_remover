@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mask painter — every resolution in folder</title>
+  <style>
+    :root {
+      --bg: #14171c;
+      --panel: #1e2329;
+      --border: #2d333b;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --danger: #f85149;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-size: 14px;
+    }
+    header {
+      padding: 10px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 10px 16px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent);
+      width: 100%;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+    }
+    label { color: var(--muted); font-size: 12px; }
+    input[type="range"] { width: 110px; vertical-align: middle; }
+    button {
+      background: #21262d;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover { background: #30363d; }
+    button.primary { background: #1f6feb; border-color: #388bfd; }
+    button.primary:hover { background: #388bfd; }
+    button.danger { background: #6e2a2a; border-color: var(--danger); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .layout {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+    .sidebar {
+      width: min(280px, 38vw);
+      min-width: 200px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 10px;
+      overflow-y: auto;
+    }
+    .sidebar h2 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .tab {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #161b22;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .tab:hover { border-color: var(--muted); }
+    .tab.active {
+      border-color: var(--accent);
+      background: #1c2128;
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .tab .dim { font-weight: 600; }
+    .tab .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .tab.found .meta { color: var(--ok); }
+    main {
+      flex: 1;
+      padding: 12px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      max-width: 52rem;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+    .wrap {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      line-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: auto;
+      background: #0d1117;
+    }
+    #view {
+      display: block;
+      max-width: min(100vw - 300px, 1200px);
+      max-height: calc(100vh - 220px);
+      width: auto;
+      height: auto;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    #view.disabled { cursor: not-allowed; opacity: 0.5; }
+    .status {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      max-width: 52rem;
+    }
+    .fname {
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: #0d1117;
+      color: var(--accent);
+    }
+    input[type="file"] { font-size: 11px; max-width: 220px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Mask painter — all unique sizes in the folder you choose</h1>
+    <div class="row">
+      <button type="button" class="primary" id="pickFolder">Choose image folder</button>
+      <input type="file" id="folder" webkitdirectory multiple style="display:none" />
+      <input type="file" id="files" accept="image/jpeg,image/png,image/webp" multiple style="display:none" />
+      <button type="button" id="pickFiles">Or pick multiple images</button>
+      <span id="scanStatus" class="hint" style="margin:0;"></span>
+    </div>
+    <div class="row">
+      <label>Brush <span id="brushVal">24</span> px<br />
+        <input type="range" id="brush" min="4" max="120" value="24" />
+      </label>
+      <div style="margin-top:14px;">
+        <button type="button" class="primary" id="modeDraw">Draw white</button>
+        <button type="button" id="modeErase">Erase</button>
+        <button type="button" class="danger" id="clear">Clear this mask</button>
+      </div>
+      <div style="margin-top:14px;">
+        <span class="fname" id="outName">—</span><br />
+        <button type="button" class="primary" id="saveOne" disabled>Save mask for this size</button>
+        <button type="button" id="saveAll" disabled>Save all painted masks</button>
+        <button type="button" id="saveJson" disabled>Download mask-rules JSON</button>
+      </div>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2 id="tabHeading">Unique sizes (0)</h2>
+      <div id="tabs"></div>
+    </aside>
+    <main>
+      <p class="hint">
+        <strong>1)</strong> Choose the same folder you batch from (e.g. <code>batch-input</code>). Every distinct width×height
+        found in JPEG/PNG/WebP is listed on the left with <strong>how many images</strong> use that size (EXIF orientation applied in modern browsers).<br />
+        <strong>2)</strong> Click each size, paint <strong>white</strong> over the watermark.<br />
+        <strong>3)</strong> <strong>Save mask for this size</strong> → save as <code>gemini_W_H.png</code> into your project <code>masks</code> folder.<br />
+        <strong>4)</strong> Run <code>sync-handpaint-rules.bat</code> (or <code>sync_handpaint_rules.py --input batch-input</code>) so
+        <code>mask-rules.Images-handpaint.json</code> lists <em>every</em> size — required so new sizes (e.g. 1428×779) are not skipped.<br />
+        <strong>5)</strong> <strong>Download mask-rules JSON</strong> here is optional; the .bat uses the same rules the Python script writes.
+      </p>
+      <div class="wrap">
+        <canvas id="view" class="disabled"></canvas>
+      </div>
+      <p class="status" id="status">Choose a folder to scan.</p>
+    </main>
+  </div>
+  <script>
+(function () {
+  const FALLBACK = { w_frac: 0.16, h_frac: 0.24, margin_frac: 0.06, pad_frac: 0.0 };
+
+  /** @type {{ w:number, h:number, count:number, sample: ImageBitmap|null, mask: HTMLCanvasElement }[]} */
+  let slots = [];
+  let active = -1;
+
+  const view = document.getElementById("view");
+  const ctx = view.getContext("2d", { willReadFrequently: true });
+  const folderInput = document.getElementById("folder");
+  const filesInput = document.getElementById("files");
+  const pickFolder = document.getElementById("pickFolder");
+  const pickFiles = document.getElementById("pickFiles");
+  const scanStatus = document.getElementById("scanStatus");
+  const brush = document.getElementById("brush");
+  const brushVal = document.getElementById("brushVal");
+  const status = document.getElementById("status");
+  const outName = document.getElementById("outName");
+  const btnDraw = document.getElementById("modeDraw");
+  const btnErase = document.getElementById("modeErase");
+  const btnClear = document.getElementById("clear");
+  const saveOne = document.getElementById("saveOne");
+  const saveAll = document.getElementById("saveAll");
+  const saveJson = document.getElementById("saveJson");
+  const tabsEl = document.getElementById("tabs");
+  const tabHeading = document.getElementById("tabHeading");
+
+  let drawing = false;
+  let mode = "draw";
+  let last = null;
+
+  function maskFileName(s) {
+    return "gemini_" + s.w + "_" + s.h + ".png";
+  }
+
+  function disposeSlots() {
+    for (const s of slots) {
+      if (s.sample && typeof s.sample.close === "function") {
+        try {
+          s.sample.close();
+        } catch (e) {}
+      }
+    }
+    slots = [];
+  }
+
+  function mctx() {
+    if (active < 0) return null;
+    return slots[active].mask.getContext("2d", { willReadFrequently: true });
+  }
+
+  function setMode(m) {
+    mode = m;
+    btnDraw.classList.toggle("primary", m === "draw");
+    btnErase.classList.toggle("primary", m === "erase");
+  }
+  btnDraw.onclick = () => setMode("draw");
+  btnErase.onclick = () => setMode("erase");
+
+  brush.oninput = () => {
+    brushVal.textContent = brush.value;
+  };
+
+  function redraw() {
+    if (active < 0 || !slots[active].sample) {
+      ctx.clearRect(0, 0, view.width, view.height);
+      return;
+    }
+    const s = slots[active];
+    ctx.clearRect(0, 0, view.width, view.height);
+    ctx.drawImage(s.sample, 0, 0);
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+    ctx.drawImage(s.mask, 0, 0);
+    ctx.restore();
+    ctx.strokeStyle = "rgba(88, 166, 255, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, view.width, view.height);
+  }
+
+  function renderTabs() {
+    tabsEl.innerHTML = "";
+    tabHeading.textContent = "Unique sizes (" + slots.length + ")";
+    slots.forEach((s, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tab" + (i === active ? " active" : "") + " found";
+      b.innerHTML =
+        '<span class="dim">' +
+        s.w +
+        "×" +
+        s.h +
+        "</span>" +
+        '<div class="meta">' +
+        s.count +
+        " image" +
+        (s.count === 1 ? "" : "s") +
+        "</div>";
+      b.onclick = () => selectTab(i);
+      tabsEl.appendChild(b);
+    });
+  }
+
+  function selectTab(i) {
+    if (i < 0 || i >= slots.length) return;
+    active = i;
+    const s = slots[i];
+    renderTabs();
+    view.classList.remove("disabled");
+    view.width = s.w;
+    view.height = s.h;
+    outName.textContent = maskFileName(s);
+    saveOne.disabled = false;
+    status.textContent =
+      "Paint white over the watermark, then save as " +
+      maskFileName(s) +
+      " in masks/. Then run sync-handpaint-rules.bat.";
+    redraw();
+  }
+
+  function extOk(name) {
+    const n = name.toLowerCase();
+    return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp");
+  }
+
+  async function decodeForSize(file) {
+    try {
+      const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+      return { w: bmp.width, h: bmp.height, bitmap: bmp };
+    } catch (err) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const im = new Image();
+        im.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve({
+            w: im.naturalWidth,
+            h: im.naturalHeight,
+            bitmap: null,
+            legacyImage: im,
+          });
+        };
+        im.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("decode"));
+        };
+        im.src = url;
+      });
+    }
+  }
+
+  async function scanFileList(files) {
+    disposeSlots();
+    const list = Array.from(files).filter((f) => extOk(f.name));
+    const bucket = new Map();
+
+    let done = 0;
+    for (const file of list) {
+      scanStatus.textContent = "Scanning… " + ++done + " / " + list.length;
+      let decoded;
+      try {
+        decoded = await decodeForSize(file);
+      } catch (e) {
+        continue;
+      }
+      const nw = decoded.w;
+      const nh = decoded.h;
+      const key = nw + "_" + nh;
+      let slot = bucket.get(key);
+      if (!slot) {
+        const mask = document.createElement("canvas");
+        mask.width = nw;
+        mask.height = nh;
+        const m = mask.getContext("2d");
+        m.fillStyle = "#000000";
+        m.fillRect(0, 0, nw, nh);
+        let sample = decoded.bitmap;
+        if (!sample && decoded.legacyImage) {
+          try {
+            sample = await createImageBitmap(decoded.legacyImage);
+          } catch (e2) {
+            continue;
+          }
+        }
+        if (!sample) continue;
+        slot = { w: nw, h: nh, count: 0, sample, mask };
+        bucket.set(key, slot);
+      }
+      slot.count++;
+    }
+
+    slots = Array.from(bucket.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return b.w * b.h - a.w * a.h;
+    });
+
+    scanStatus.textContent =
+      list.length === 0
+        ? "No JPEG/PNG/WebP in selection."
+        : "Found " + slots.length + " unique size(s) from " + list.length + " file(s).";
+
+    saveAll.disabled = slots.length === 0;
+    saveJson.disabled = slots.length === 0;
+
+    if (slots.length === 0) {
+      active = -1;
+      view.classList.add("disabled");
+      view.width = 400;
+      view.height = 120;
+      ctx.fillStyle = "#161b22";
+      ctx.fillRect(0, 0, 400, 120);
+      ctx.fillStyle = "#8b949e";
+      ctx.font = "14px sans-serif";
+      ctx.fillText("No images decoded. Try another folder or file types.", 12, 64);
+      outName.textContent = "—";
+      saveOne.disabled = true;
+      status.textContent = "Pick a folder that contains your photos.";
+      renderTabs();
+      return;
+    }
+
+    renderTabs();
+    selectTab(0);
+  }
+
+  pickFolder.onclick = () => folderInput.click();
+  folderInput.onchange = () => {
+    if (!folderInput.files || !folderInput.files.length) return;
+    scanFileList(folderInput.files);
+  };
+  pickFiles.onclick = () => filesInput.click();
+  filesInput.onchange = () => {
+    if (!filesInput.files || !filesInput.files.length) return;
+    scanFileList(filesInput.files);
+  };
+
+  btnClear.onclick = () => {
+    if (active < 0 || !slots[active]) return;
+    const s = slots[active];
+    const m = s.mask.getContext("2d");
+    m.fillStyle = "#000";
+    m.fillRect(0, 0, s.w, s.h);
+    redraw();
+  };
+
+  function getLocal(e) {
+    const rect = view.getBoundingClientRect();
+    const sx = view.width / rect.width;
+    const sy = view.height / rect.height;
+    return {
+      x: (e.clientX - rect.left) * sx,
+      y: (e.clientY - rect.top) * sy,
+    };
+  }
+
+  function paintAt(x, y) {
+    const mc = mctx();
+    if (!mc) return;
+    const r = Number(brush.value);
+    mc.beginPath();
+    mc.arc(x, y, r, 0, Math.PI * 2);
+    mc.fillStyle = mode === "draw" ? "#ffffff" : "#000000";
+    mc.fill();
+    redraw();
+  }
+
+  function line(x0, y0, x1, y1) {
+    const mc = mctx();
+    if (!mc) return;
+    const r = Number(brush.value);
+    mc.lineCap = "round";
+    mc.lineJoin = "round";
+    mc.lineWidth = r * 2;
+    mc.strokeStyle = mode === "draw" ? "#ffffff" : "#000000";
+    mc.beginPath();
+    mc.moveTo(x0, y0);
+    mc.lineTo(x1, y1);
+    mc.stroke();
+    redraw();
+  }
+
+  view.addEventListener("pointerdown", (e) => {
+    if (active < 0 || !slots[active] || view.classList.contains("disabled")) return;
+    view.setPointerCapture(e.pointerId);
+    drawing = true;
+    const p = getLocal(e);
+    last = p;
+    paintAt(p.x, p.y);
+  });
+
+  view.addEventListener("pointermove", (e) => {
+    if (!drawing || active < 0) return;
+    const p = getLocal(e);
+    if (last) line(last.x, last.y, p.x, p.y);
+    last = p;
+  });
+
+  function endStroke() {
+    drawing = false;
+    last = null;
+  }
+  view.addEventListener("pointerup", endStroke);
+  view.addEventListener("pointercancel", endStroke);
+  view.addEventListener("pointerleave", (e) => {
+    if (!e.buttons) endStroke();
+  });
+
+  async function saveMaskCanvas(canvas, filename) {
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+    if (!blob) return false;
+
+    if (window.showSaveFilePicker) {
+      try {
+        const h = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: "PNG mask", accept: { "image/png": [".png"] } }],
+        });
+        const w = await h.createWritable();
+        await w.write(blob);
+        await w.close();
+        return true;
+      } catch (err) {
+        if (err && err.name === "AbortError") return false;
+      }
+    }
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return true;
+  }
+
+  function maskHasPaint(s) {
+    const d = s.mask.getContext("2d").getImageData(0, 0, s.w, s.h).data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] > 10) return true;
+    }
+    return false;
+  }
+
+  saveOne.onclick = async () => {
+    if (active < 0) return;
+    const s = slots[active];
+    const name = maskFileName(s);
+    const ok = await saveMaskCanvas(s.mask, name);
+    status.textContent = ok
+      ? "Saved " + name + " — copy to project masks/ if needed."
+      : "Save cancelled.";
+  };
+
+  saveAll.onclick = async () => {
+    let n = 0;
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (!maskHasPaint(s)) continue;
+      const name = maskFileName(s);
+      status.textContent = "Saving " + name + " (" + (n + 1) + ")…";
+      await saveMaskCanvas(s.mask, name);
+      n++;
+      await new Promise((r) => setTimeout(r, 450));
+    }
+    status.textContent =
+      n === 0
+        ? "Paint white on at least one size, or allow each save dialog."
+        : "Saved " + n + " mask(s). Run sync-handpaint-rules.bat, then batch.";
+  };
+
+  function buildHandpaintJson() {
+    const rules = slots.map((s) => ({
+      if: {
+        width_min: s.w,
+        width_max: s.w,
+        height_min: s.h,
+        height_max: s.h,
+      },
+      then: { mask: "masks/" + maskFileName(s) },
+    }));
+    return JSON.stringify({ fallback: FALLBACK, rules: rules }, null, 2) + "\n";
+  }
+
+  saveJson.onclick = async () => {
+    if (slots.length === 0) return;
+    const text = buildHandpaintJson();
+    const blob = new Blob([text], { type: "application/json" });
+
+    if (window.showSaveFilePicker) {
+      try {
+        const h = await window.showSaveFilePicker({
+          suggestedName: "mask-rules.Images-handpaint.json",
+          types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+        });
+        const w = await h.createWritable();
+        await w.write(blob);
+        await w.close();
+        status.textContent = "Wrote mask-rules JSON (prefer sync-handpaint-rules.bat for EXIF match).";
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+      }
+    }
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "mask-rules.Images-handpaint.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    status.textContent = "Downloaded JSON — replace project file or run sync script for exact batch match.";
+  };
+
+  tabHeading.textContent = "Unique sizes (0)";
+  renderTabs();
+  view.width = 400;
+  view.height = 120;
+  view.classList.add("disabled");
+  ctx.fillStyle = "#161b22";
+  ctx.fillRect(0, 0, 400, 120);
+  ctx.fillStyle = "#8b949e";
+  ctx.font = "14px sans-serif";
+  ctx.fillText("Choose your image folder to list every resolution.", 12, 64);
+})();
+  </script>
+</body>
+</html>

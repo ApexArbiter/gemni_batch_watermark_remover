@@ -21,8 +21,10 @@ set "MASK_FILE=%~dp0watermark-mask.png"
 set "OUTPUT_DIR=%~dp0batch-output"
 
 REM --- Mask mode ---------------------------------------------------------------
-REM Tuned for your scan: 626 / 1024 / 1280x698 / 1428-1431 / 1600. Clear MASK_RULES_JSON to use CORNER_* only.
+REM Handpaint JSON when any masks\gemini_*.png exists; run sync-handpaint-rules.bat after new sizes.
 set "MASK_RULES_JSON=%~dp0mask-rules.Images-default.json"
+dir /b "%~dp0masks\gemini_*.png" 2>nul | findstr /r "." >nul
+if not errorlevel 1 set "MASK_RULES_JSON=%~dp0mask-rules.Images-handpaint.json"
 REM USE_CORNER_MASK=1 (default): one set of corner fractions for every photo.
 REM USE_CORNER_MASK=0: watermark-mask.png only.
 set "USE_CORNER_MASK=1"

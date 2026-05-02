@@ -1,0 +1,12 @@
+Starter masks use the same bottom-right rectangles as your corner rules JSON.
+If LaMa still misses the logo:
+  1) Open each PNG in IOPaint Web UI (brush white on the watermark).
+  2) Save over the same file in this folder.
+  3) Set MASK_RULES_JSON to mask-rules.Images-handpaint.json in the batch .bat files.
+
+Generated files:
+  gemini_626_626.png
+  gemini_1024_1024.png
+  gemini_1280_698.png
+  gemini_1431_780.png
+  gemini_1600_872.png
